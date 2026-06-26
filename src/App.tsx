@@ -16,7 +16,7 @@ interface Transaction {
   date: string;
 }
 
-const API_URL = 'http://localhost:5000/api/transactions';
+const API_URL = 'https://finance-backend-3ib1.onrender.com/api/transactions';
 const DEFAULT_INCOME_CATS = ['เงินเดือน', 'ขายของ', 'ลงทุน', 'รายได้เสริม'];
 const DEFAULT_EXPENSE_CATS = ['อาหาร', 'เดินทาง', 'ช้อปปิ้ง', 'ที่พัก/บิล', 'บันเทิง'];
 
