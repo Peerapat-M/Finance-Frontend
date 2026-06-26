@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { createClient, type User } from '@supabase/supabase-js';
-import { Wallet, Plus, Trash2, Receipt, ArrowUpRight, ArrowDownLeft, Tag, LogIn, LogOut } from 'lucide-react';
+import { Wallet, Plus, Trash2, Receipt, ArrowUpRight, ArrowDownLeft, LogOut } from 'lucide-react';
 
 // ตัวเชื่อมต่อ Supabase
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
