@@ -99,10 +99,25 @@ export default function App() {
     e.preventDefault();
     if (!description || !amount) return;
     try {
-      const finalDate = new Date(transactionDate).toISOString();
+      const [year, month, day] = transactionDate.split('-').map(Number);
+      const now = new Date();
+
+      const combinedDate = new Date(
+      year, 
+      month - 1, // เดือนใน JS เริ่มจาก 0
+      day, 
+      now.getHours(), 
+      now.getMinutes(), 
+      now.getSeconds(), 
+      now.getMilliseconds()
+    );
+
+    const finalDate = combinedDate.toISOString();
+
       await axios.post(API_URL, {
         type, description, amount: parseFloat(amount), date: finalDate
       }, getAuthHeader());
+      
       setDescription('');
       setAmount('');
       setTransactionDate(getTodayString());
