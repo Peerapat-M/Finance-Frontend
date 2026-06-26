@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { createClient, type User } from '@supabase/supabase-js';
-import { Wallet, Plus, Trash2, Receipt, ArrowUpRight, ArrowDownLeft, LogOut } from 'lucide-react';
+import { Wallet, Plus, Trash2, Receipt, ArrowUpRight, ArrowDownLeft, LogOut, Calendar, ChevronDown } from 'lucide-react';
 
 // ตัวเชื่อมต่อ Supabase
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
@@ -16,9 +16,17 @@ interface Transaction {
   date: string;
 }
 
-const API_URL = 'https://finance-backend-3ib1.onrender.com/api/transactions';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/transactions';
 const DEFAULT_INCOME_CATS = ['เงินเดือน', 'ขายของ', 'ลงทุน', 'รายได้เสริม'];
 const DEFAULT_EXPENSE_CATS = ['อาหาร', 'เดินทาง', 'ช้อปปิ้ง', 'ที่พัก/บิล', 'บันเทิง'];
+
+const getTodayString = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +35,7 @@ export default function App() {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'income' | 'expense'>('income');
+  const [transactionDate, setTransactionDate] = useState<string>(getTodayString());
   
   const [customIncomeCats, setCustomIncomeCats] = useState<string[]>(() => 
     JSON.parse(localStorage.getItem('custom_inc_cats') || '[]')
@@ -36,6 +45,9 @@ export default function App() {
   );
   const [newCatInput, setNewCatInput] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
+
+  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [filterMonth, setFilterMonth] = useState<string>('all');
 
   useEffect(() => {
     supabaseFront.auth.getSession().then(({ data: { session } }) => {
@@ -73,7 +85,10 @@ export default function App() {
   };
 
   const handleGoogleLogin = async () => {
-    await supabaseFront.auth.signInWithOAuth({ provider: 'google' });
+    await supabaseFront.auth.signInWithOAuth({ 
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+     });
   };
 
   const handleLogout = async () => {
@@ -84,11 +99,13 @@ export default function App() {
     e.preventDefault();
     if (!description || !amount) return;
     try {
+      const finalDate = new Date(transactionDate).toISOString();
       await axios.post(API_URL, {
-        type, description, amount: parseFloat(amount), date: new Date().toISOString()
+        type, description, amount: parseFloat(amount), date: finalDate
       }, getAuthHeader());
       setDescription('');
       setAmount('');
+      setTransactionDate(getTodayString());
       fetchTransactions();
     } catch (err) {
       console.error('Error adding transaction:', err);
@@ -133,70 +150,66 @@ export default function App() {
     return { day, week, month };
   };
 
+  const filteredTransactions = transactions.filter(t => {
+    const matchType = filterType === 'all' || t.type === filterType;
+    let matchMonth = true;
+    if (filterMonth !== 'all') {
+      const tDate = new Date(t.date);
+      const yyyyMm = `${tDate.getFullYear()}-${String(tDate.getMonth() + 1).padStart(2, '0')}`;
+      matchMonth = yyyyMm === filterMonth;
+    }
+    return matchType && matchMonth;
+  });
+
+  const uniqueMonths = Array.from(new Set(transactions.map(t => {
+    const d = new Date(t.date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }))).sort((a, b) => b.localeCompare(a));
+
   const summary = getSummary();
   const formatMoney = (num: number) => '฿' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const currentCategories = type === 'income' ? [...DEFAULT_INCOME_CATS, ...customIncomeCats] : [...DEFAULT_EXPENSE_CATS, ...customExpenseCats];
 
-  // --- หน้าเข้าสู่ระบบแบบมินิมอลโมเดิร์น (เมื่อยังไม่ได้ล็อกอิน) ---
   if (!user) {
     return (
       <div className="bg-[#F4F7F5] min-h-screen font-sans flex items-center justify-center p-6 relative overflow-hidden selection:bg-[#D8E8E1]">
-        
-        {/* ตกแต่งพื้นหลังด้วยวงกลม Gradient นุ่ม ๆ (Decorative Background Blobs) */}
         <div className="absolute top-[-10%] left-[-10%] w-72 h-72 bg-[#E4EFE9] rounded-full blur-3xl opacity-60" />
         <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-[#D8E8E1] rounded-full blur-3xl opacity-50" />
-
         <div className="bg-white/80 backdrop-blur-md p-8 sm:p-10 rounded-3xl border border-[#E9EFEA] shadow-[0_8px_30px_rgb(180,200,190,0.2)] max-w-md w-full text-center relative z-10 transition-all duration-300 hover:shadow-[0_8px_40px_rgb(180,200,190,0.3)]">
-          
-          {/* Logo Brand */}
           <div className="flex justify-center mb-6">
             <div className="bg-[#E4EFE9] text-[#4A7864] p-4 rounded-2xl shadow-xs transition-transform duration-500 hover:rotate-12">
               <Wallet size={36} strokeWidth={1.5} />
             </div>
           </div>
-
-          {/* Header Text */}
-          <h1 className="text-2xl font-bold tracking-tight text-[#243E33] sm:text-3xl">
-            ยินดีต้อนรับสู่ <span className="text-[#4A7864]">Fin.</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-[#628275] mt-2 mb-8 leading-relaxed">
-            แอปพลิเคชันบันทึกรายรับรายจ่ายประจำวันส่วนบุคคล <br className="hidden sm:inline" />
-            ช่วยให้คุณจัดการเป้าหมายทางการเงินได้อย่างแม่นยำและปลอดภัย
-          </p>
-
-          {/* ปุ่มล็อกอินด้วย Google ดีไซน์พรีเมียม */}
-          <button 
-            onClick={handleGoogleLogin} 
-            className="w-full bg-white hover:bg-[#F9FBFA] text-gray-700 font-medium py-3 px-4 border border-gray-200 rounded-xl shadow-xs hover:shadow-sm transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer text-sm group"
-          >
-            {/* Google SVG Icon แท้ */}
-            <svg className="w-5 h-5 transition-transform duration-200 group-hover:scale-105" viewBox="0 0 24 24" width="100%" height="100%">
-              <g transform="matrix(1, 0, 0, 1, 0, 0)">
-                <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.6h3.3c1.92,-1.78 3.02,-4.4 3.02,-7.4c0,-0.37 -0.03,-0.74 -0.01,-1H21.35z" fill="#4285F4" />
-                <path d="M12,20.6c2.6,0 4.77,-0.85 6.36,-2.3l-3.3,-2.6c-0.9,0.6 -2.07,0.98 -3.06,0.98c-2.37,0 -4.38,-1.59 -5.1,-3.74H3.4v2.7c1.58,3.15 4.83,5.22 8.6,5.22z" fill="#34A853" />
-                <path d="M6.9,12.94c-0.18,-0.54 -0.29,-1.11 -0.29,-1.7c0,-0.59 0.11,-1.16 0.29,-1.7V6.8H3.4c-0.62,1.24 -0.98,2.64 -0.98,4.14c0,1.5 0.36,2.9 0.98,4.14L6.9,12.94z" fill="#FBBC05" />
-                <path d="M12,5.66c1.4,0 2.68,0.48 3.68,1.43l2.76,-2.76c-1.66,-1.55 -3.85,-2.51 -6.44,-2.51c-3.77,0 -7.02,2.07 -8.6,5.22l3.5,2.74c0.72,-2.15 2.73,-3.74 5.1,-3.74z" fill="#EA4335" />
-              </g>
-            </svg>
+          <h1 className="text-2xl font-bold tracking-tight text-[#243E33] sm:text-3xl">ยินดีต้อนรับสู่ <span className="text-[#4A7864]">Fin.</span></h1>
+          <p className="text-xs sm:text-sm text-[#628275] mt-2 mb-8 leading-relaxed">แอปพลิเคชันบันทึกรายรับรายจ่ายประจำวันส่วนบุคคล <br className="hidden sm:inline" />ช่วยให้คุณจัดการเป้าหมายทางการเงินได้อย่างแม่นยำและปลอดภัย</p>
+          <button onClick={handleGoogleLogin} className="w-full bg-white hover:bg-[#F9FBFA] text-gray-700 font-medium py-3 px-4 border border-gray-200 rounded-xl shadow-xs hover:shadow-sm transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer text-sm group">
+            <svg className="w-5 h-5 transition-transform duration-200 group-hover:scale-105" viewBox="0 0 24 24" width="100%" height="100%"><g transform="matrix(1, 0, 0, 1, 0, 0)"><path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.6h3.3c1.92,-1.78 3.02,-4.4 3.02,-7.4c0,-0.37 -0.03,-0.74 -0.01,-1H21.35z" fill="#4285F4" /><path d="M12,20.6c2.6,0 4.77,-0.85 6.36,-2.3l-3.3,-2.6c-0.9,0.6 -2.07,0.98 -3.06,0.98c-2.37,0 -4.38,-1.59 -5.1,-3.74H3.4v2.7c1.58,3.15 4.83,5.22 8.6,5.22z" fill="#34A853" /><path d="M6.9,12.94c-0.18,-0.54 -0.29,-1.11 -0.29,-1.7c0,-0.59 0.11,-1.16 0.29,-1.7V6.8H3.4c-0.62,1.24 -0.98,2.64 -0.98,4.14c0,1.5 0.36,2.9 0.98,4.14L6.9,12.94z" fill="#FBBC05" /><path d="M12,5.66c1.4,0 2.68,0.48 3.68,1.43l2.76,-2.76c-1.66,-1.55 -3.85,-2.51 -6.44,-2.51c-3.77,0 -7.02,2.07 -8.6,5.22l3.5,2.74c0.72,-2.15 2.73,-3.74 5.1,-3.74z" fill="#EA4335" /></g></svg>
             <span className="font-sans tracking-wide">ดำเนินการต่อด้วย Google</span>
           </button>
-
-          {/* Footer Card Notes */}
-          <div className="mt-8 pt-5 border-t border-[#F2F6F3] text-[11px] text-[#A4B8AF] flex flex-col gap-1">
-            <p>ระบบจะแยกพื้นที่จัดเก็บข้อมูลของคุณอย่างปลอดภัยแบบ 100%</p>
-            <p className="font-light">Powered by Supabase Auth & Row Level Security</p>
-          </div>
-
+          <div className="mt-8 pt-5 border-t border-[#F2F6F3] text-[11px] text-[#A4B8AF] flex flex-col gap-1"><p>ระบบจะแยกพื้นที่จัดเก็บข้อมูลของคุณอย่างปลอดภัยแบบ 100%</p><p className="font-light">Powered by Supabase Auth & Row Level Security</p></div>
         </div>
       </div>
     );
   }
 
-  // --- ส่วนหน้าแอปหลัก (อัปเกรดดีไซน์ใหม่) ---
   return (
     <div className="bg-[#F4F7F5] text-[#334E43] min-h-screen font-['Mali'] antialiased selection:bg-[#D8E8E1] relative overflow-hidden">
       
-      {/* Decorative Background Blobs */}
+      {/* สไตล์ CSS สำหรับ Custom คุมธีมเบราว์เซอร์ปฏิทินในตัวแอป */}
+      <style>{`
+        input[type="date"]::-webkit-calendar-picker-indicator {
+          background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%234A7864" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>');
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 8px;
+          transition: all 0.2s;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator:hover {
+          background-color: #E4EFE9;
+        }
+      `}</style>
+
       <div className="absolute top-[-5%] right-[-5%] w-80 h-80 bg-[#E4EFE9] rounded-full blur-3xl opacity-60 pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#D8E8E1] rounded-full blur-3xl opacity-40 pointer-events-none" />
 
@@ -270,6 +283,19 @@ export default function App() {
               </div>
 
               <div className="space-y-4">
+                {/* แก้ไข Input วันที่: บังคับคู่ธีมด้วยสีกดเลือก (accent-[#4A7864]) */}
+                <div>
+                  <label className="block text-xs font-bold text-[#628275] mb-1 px-1 flex items-center gap-1">
+                    <Calendar size={12} /> วันที่ทำรายการ
+                  </label>
+                  <input 
+                    type="date" 
+                    value={transactionDate} 
+                    onChange={(e) => setTransactionDate(e.target.value)} 
+                    required 
+                    className="w-full p-3.5 bg-[#F4F7F5] border-2 border-transparent rounded-2xl focus:bg-white focus:border-[#E4EFE9] text-sm text-[#243E33] transition-all outline-none cursor-pointer accent-[#4A7864] font-medium" 
+                  />
+                </div>
                 <div className="group">
                   <label className="block text-xs font-bold text-[#628275] mb-1 px-1">รายละเอียด</label>
                   <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="..." required className="w-full p-3.5 bg-[#F4F7F5] border-2 border-transparent rounded-2xl focus:bg-white focus:border-[#E4EFE9] text-sm text-[#243E33] transition-all outline-none" />
@@ -288,20 +314,53 @@ export default function App() {
 
           {/* Transaction History Section */}
           <section className="bg-white/80 backdrop-blur-md rounded-[2.5rem] border border-white/60 shadow-[0_8px_30px_rgb(180,200,190,0.15)] overflow-hidden lg:col-span-7">
-            <div className="p-7 border-b border-gray-100/50 flex justify-between items-center bg-white/30">
-              <h2 className="text-lg font-bold text-[#243E33] flex items-center gap-2"><Receipt size={20} className="text-[#4A7864]" /> ประวัติธุรกรรม</h2>
-              <span className="text-[10px] font-bold px-3 py-1 bg-[#E4EFE9] text-[#4A7864] rounded-full uppercase tracking-widest">{transactions.length} รายการ</span>
+            <div className="p-7 border-b border-gray-100/50 bg-white/30 space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-bold text-[#243E33] flex items-center gap-2"><Receipt size={20} className="text-[#4A7864]" /> ประวัติธุรกรรม</h2>
+                <span className="text-[10px] font-bold px-3 py-1 bg-[#E4EFE9] text-[#4A7864] rounded-full uppercase tracking-widest">{filteredTransactions.length} รายการ</span>
+              </div>
+
+              {/* ส่วนควบคุม Filter ดูย้อนหลัง */}
+              <div className="flex flex-wrap gap-3 pt-2">
+                
+                {/* แก้ไข Dropdown เลือกเดือน: แปลงโฉมโครงสร้างโมเดิร์นพร้อมไอคอน Chevron */}
+                <div className="relative flex items-center bg-[#F4F7F5] rounded-xl text-xs font-bold text-[#628275] border border-transparent focus-within:border-[#BCD6CB] focus-within:bg-white transition-all">
+                  <span className="pl-3 pointer-events-none"><Calendar size={14} /></span>
+                  <select 
+                    value={filterMonth} 
+                    onChange={(e) => setFilterMonth(e.target.value)} 
+                    className="appearance-none bg-transparent pl-2 pr-8 py-2 outline-none cursor-pointer text-[#334E43] font-['Mali'] z-10"
+                  >
+                    <option value="all">ทุกเดือน/ทุกปี</option>
+                    {uniqueMonths.map(m => {
+                      const [year, month] = m.split('-');
+                      const dateLabel = new Date(parseInt(year), parseInt(month) - 1).toLocaleString('th-TH', { month: 'long', year: 'numeric' });
+                      return <option key={m} value={m}>{dateLabel}</option>;
+                    })}
+                  </select>
+                  <span className="absolute right-2.5 pointer-events-none text-[#7C9A8E]"><ChevronDown size={14} /></span>
+                </div>
+
+                {/* ปุ่มเลือกประเภท ทั้งหมด/รายรับ/รายจ่าย */}
+                <div className="flex items-center gap-1 bg-[#F4F7F5] p-1 rounded-xl text-xs font-bold">
+                  {(['all', 'income', 'expense'] as const).map((t) => (
+                    <button key={t} type="button" onClick={() => setFilterType(t)} className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${filterType === t ? 'bg-white text-[#4A7864] shadow-xs' : 'text-[#A4B8AF] hover:text-[#7C9A8E]'}`}>
+                      {t === 'all' ? 'ทั้งหมด' : t === 'income' ? 'รายรับ' : 'รายจ่าย'}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             
             <div className="overflow-y-auto max-h-[600px] scrollbar-hide">
-              {transactions.length === 0 ? (
+              {filteredTransactions.length === 0 ? (
                 <div className="py-24 text-center text-[#A4B8AF]">
                   <Receipt className="mx-auto mb-4 opacity-20" size={60} strokeWidth={1} />
-                  <p className="text-sm">ยังไม่มีประวัติการทำธุรกรรม</p>
+                  <p className="text-sm">ไม่พบรายการในช่วงเวลาหรือเงื่อนไขที่เลือก</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100/50">
-                  {transactions.map((t) => (
+                  {filteredTransactions.map((t) => (
                     <div key={t.id} className="p-5 hover:bg-[#F9FBFA]/50 transition-colors flex justify-between items-center group">
                       <div className="flex items-center gap-4">
                         <div className={`p-3 rounded-2xl ${t.type === 'income' ? 'bg-[#E4EFE9] text-[#4A7864]' : 'bg-[#FFF5F5] text-[#A25757]'}`}>
