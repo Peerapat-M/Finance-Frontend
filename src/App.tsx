@@ -99,7 +99,15 @@ export default function App() {
     e.preventDefault();
     if (!description || !amount) return;
     try {
-      const finalDate = new Date(transactionDate).toISOString();
+      const chosenDate = new Date(transactionDate);
+
+      const now = new Date();
+      chosenDate.setHours(now.getHours());
+      chosenDate.setMinutes(now.getMinutes());
+      chosenDate.setSeconds(now.getSeconds());
+      chosenDate.setMilliseconds(now.getMilliseconds());
+
+      const finalDate = chosenDate.toISOString();
     
       await axios.post(API_URL, {
         type, description, amount: parseFloat(amount), date: finalDate
